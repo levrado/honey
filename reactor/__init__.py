@@ -91,13 +91,18 @@ class Reactor(object):
 
         if not data:
             reply = 'OK...'
-            connection.send(bytes(reply, self._encoding))
-            self._logger.info('Replied to client and removing it from our waiting list')
+            try:
+                connection.send(bytes(reply, self._encoding))
+                self._logger.info('Replied to client and removing it from our waiting list')
+            except BrokenPipeError:
+                connection.close()
+                self._connections.remove(connection)
+                self._logger.warn('Disconnected not clenaly from client')
 
         elif b'end' in data:
             connection.close()
             self._connections.remove(connection)
-            self._logger.warn('Disconnected clenaly from client')
+            self._logger.debug('Disconnected clenaly from client')
 
         else:
             self._logger.debug('Got new data from client, putting the client in our waiting list')
