@@ -131,26 +131,23 @@ class Reactor(object):
         next = 0
         try:
             while self._running:
-                    try:
-                        # dont wait at all, check and continue without blocking
-                        inputready, outputready, exceptready = select.select(self._connections, [], [], 0)
+                # dont wait at all, check and continue without blocking
+                input_ready, output_ready, except_ready = select.select(self._connections, [], [], 0)
 
-                        # did we got anything from one of the file descriptors?
-                        # do we have anything waiting?
-                        if inputready:
-                            for acceptable_object in inputready + self._waiting_to_complete:
-                                self._handle_acceptable_object(acceptable_object)
+                # did we got anything from one of the file descriptors?
+                # do we have anything waiting?
+                if input_ready:
+                    for acceptable_object in input_ready + self._waiting_to_complete:
+                        self._handle_acceptable_object(acceptable_object)
 
-                        # we have nothing in the file descriptor, process one of the socket objects in the
-                        # waiting list and check again using the select
-                        elif self._waiting_to_complete:
-                            if next >= len(self._waiting_to_complete):
-                                next = 0
-                            next_socket_object_to_handle = self._waiting_to_complete[next]
-                            self._handle_acceptable_object(next_socket_object_to_handle)
-                            next += 1
-                    except Exception:
-                        raise Exception
+                # we have nothing in the file descriptor, process one of the socket objects in the
+                # waiting list and check again using the select
+                elif self._waiting_to_complete:
+                    if next >= len(self._waiting_to_complete):
+                        next = 0
+                    next_socket_object_to_handle = self._waiting_to_complete[next]
+                    self._handle_acceptable_object(next_socket_object_to_handle)
+                    next += 1
 
         except Exception as e:
             traceback.print_exc()
