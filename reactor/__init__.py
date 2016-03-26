@@ -29,15 +29,19 @@ class Reactor:
         # set the socket object to none blocking so it will not get our thread stuck
         self._connections.append(connection)
         self._clients[connection] = server
+        self._logger.debug('Got a new client, adding to server={0} client={1}'.format(server, connection))
 
     def _handle_new_message_received(self, connection):
         self._clients[connection].handle_data_received(connection)
+        # self._logger.debug('Got new data from client={0}'.format(connection))
 
     def _handle_acceptable_object(self, acceptable_object):
         if acceptable_object == sys.stdin:
 
             # handle standard input
             junk = sys.stdin.readline()
+
+            self._logger.debug('Got stdin, closing the server')
 
             # stop the server
             self._running = False
@@ -50,13 +54,30 @@ class Reactor:
         tcp_server = protocols.tcp.Server(host, port, HandlerClass)
         self._servers[tcp_server.socket] = tcp_server
         self._connections.append(tcp_server.socket)
+        self._logger.debug('Added a new tcp server to reactor server={0}'.format(tcp_server))
+
+    def remove_connection(self, connection):
+        self._connections.remove(connection)
+        self._logger.debug('Removed a connection scoket={0}'.format(connection))
 
 def _handle_io():
+    input_ready = None
     select_connections_list = main_reactor._connections + [sys.stdin]
+
+    for connection in select_connections_list:
+        try:
+            if connection._closed:
+                main_reactor.remove_connection(connection)
+        except AttributeError:
+            pass
 
     # dont wait at all, check and continue without blocking
     # TODO make this a blocking stmnt, handle the existing connections on a new thread (sub process)
-    input_ready, output_ready, except_ready = select.select(select_connections_list, [], [], 0)
+    try:
+        input_ready, output_ready, except_ready = select.select(select_connections_list, [], [], 0)
+
+    except ValueError:
+        pass
 
     # did we got anything from one of the file descriptors?
     if input_ready:
@@ -82,11 +103,15 @@ def run():
 
             '''
             _handle_io()
+
+    except (KeyboardInterrupt, SystemExit):
+        pass
+
     except Exception as e:
-        traceback.print_exc()
+        traceback.print_tb()
 
     finally:
-        main_reactor._logger.info('Stopping reactor')
+        main_reactor._logger.info('Stopping reactor (Should be a cleanup)')
 
 def add_tcp_server(host, port, HandlerClass):
     main_reactor.add_server(host, port, HandlerClass)
