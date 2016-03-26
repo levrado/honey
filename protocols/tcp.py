@@ -56,10 +56,17 @@ class Server(_Protocol):
     def handle_connection_made(self):
         return self._accept_new_connection()
 
+    def _handle_closed_connection(self, closed_socket):
+        print("Closed Socket")
+        del self._handlers
+        closed_socket.close()
+
     def handle_data_received(self, socket_with_new_data):
-        data = socket_with_new_data.recv(1024)
+        data = socket_with_new_data.recv(1)
         if data:
             self._handlers[socket_with_new_data].got_new_data(data)
+        else:
+            self._handle_closed_connection(socket_with_new_data)
 
     def _accept_new_connection(self):
         connection, address = self.socket.accept()
