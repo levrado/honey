@@ -35,8 +35,10 @@ class Reactor:
 
     def _handle_acceptable_object(self, acceptable_object):
         if acceptable_object == sys.stdin:
+
             # handle standard input
             junk = sys.stdin.readline()
+
             # stop the server
             self._running = False
         elif self._servers.get(acceptable_object) is not None:
@@ -51,6 +53,7 @@ class Reactor:
 
 def _handle_io():
     select_connections_list = main_reactor._connections + [sys.stdin]
+
     # dont wait at all, check and continue without blocking
     # TODO make this a blocking stmnt, handle the existing connections on a new thread (sub process)
     input_ready, output_ready, except_ready = select.select(select_connections_list, [], [], 0)
@@ -83,7 +86,7 @@ def run():
         traceback.print_exc()
 
     finally:
-        main_reactor._logger.info('Stoppin reactor')
+        main_reactor._logger.info('Stopping reactor')
 
 def add_tcp_server(host, port, HandlerClass):
     main_reactor.add_server(host, port, HandlerClass)

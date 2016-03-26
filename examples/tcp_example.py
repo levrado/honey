@@ -2,7 +2,7 @@ import protocols.tcp
 import reactor
 
 
-class TcpHandler:
+class TcpHandler(protocols.tcp.Handler):
 
     def __init__(self, connection, client_address):
         '''
@@ -16,6 +16,10 @@ class TcpHandler:
         connection.send(bytes('Welcome to the server. Type something and hit enter\n', 'UTF-8'))
 
     def got_new_data(self, data):
+        '''
+        :param data: the data from the client
+        :return: None
+        '''
         print(data)
 
 

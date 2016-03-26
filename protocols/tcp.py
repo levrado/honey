@@ -1,4 +1,5 @@
 import socket
+import abc
 
 import protocols
 
@@ -6,14 +7,42 @@ import protocols
 class _Protocol(protocols.Protocol):
 
     def __init__(self, RequestHandlerClass):
+        '''
+        Init TCP/IP Protocol with handler class
+        :param RequestHandlerClass: class that handles a connection
+        :return: None
+        '''
         super().__init__()
         self._RequestHandlerClass = RequestHandlerClass
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
+class Handler(object):
+    '''
+    Abstract class
+    '''
+
+    __metadata__ = abc.ABCMeta
+
+    def __init__(self):
+        pass
+
+    def got_new_data(self, data):
+        '''
+        :param data: data to handle
+        :return: None
+        '''
+        pass
+
 class Server(_Protocol):
 
     def __init__(self, host, port, RequestHandlerClass):
+        '''
+        :param host:
+        :param port:
+        :param RequestHandlerClass:
+        :return:
+        '''
         super().__init__(RequestHandlerClass)
         self._host = host
         self._port = port
@@ -33,6 +62,8 @@ class Server(_Protocol):
     def _accept_new_connection(self):
         connection, address = self.socket.accept()
         connection.setblocking(0)
+
+        # call class constructor with the accepted connection and address of client
         self._RequestHandlerClass = self._RequestHandlerClass(connection, address)
 
         return connection, address
