@@ -5,14 +5,16 @@ import traceback
 import logging
 
 import protocols.tcp
+from reactor.callback import Callback
 import utils
+
+
+__all__ = ["Callback"]
 
 
 class Reactor:
 
     def __init__(self):
-
-        self._data_received = {}
         self._connections = []
         self._servers = {}
         self._clients = {}
@@ -59,6 +61,13 @@ class Reactor:
     def remove_connection(self, connection):
         self._connections.remove(connection)
         self._logger.debug('Removed a connection scoket={0}'.format(connection))
+
+    def close_all(self):
+        for conn in self._connections:
+            try:
+                conn.close()
+            except:
+                pass
 
 def _handle_io():
     input_ready = None
@@ -111,6 +120,7 @@ def run():
         traceback.print_tb()
 
     finally:
+        main_reactor.close_all()
         main_reactor._logger.info('Stopping reactor (Should be a cleanup)')
 
 def add_tcp_server(host, port, HandlerClass):
