@@ -47,6 +47,7 @@ class Server(_Protocol):
         self._host = host
         self._port = port
         self._bind()
+        self._handlers = {}
 
     def _bind(self):
         self.socket.bind((self._host, self._port))
@@ -57,13 +58,14 @@ class Server(_Protocol):
 
     def handle_data_received(self, socket_with_new_data):
         data = socket_with_new_data.recv(1024)
-        self._RequestHandlerClass.got_new_data(data)
+        if data:
+            self._handlers[socket_with_new_data].got_new_data(data)
 
     def _accept_new_connection(self):
         connection, address = self.socket.accept()
         connection.setblocking(0)
 
         # call class constructor with the accepted connection and address of client
-        self._RequestHandlerClass = self._RequestHandlerClass(connection, address)
+        self._handlers[connection] = self._RequestHandlerClass(connection, address)
 
         return connection, address
