@@ -6,27 +6,34 @@ import protocols
 
 class _Protocol(protocols.Protocol):
 
-    def __init__(self, RequestHandlerClass):
+    def __init__(self, request_factory):
         '''
         Init TCP/IP Protocol with handler class
         :param RequestHandlerClass: class that handles a connection
         :return: None
         '''
         super().__init__()
-        self._RequestHandlerClass = RequestHandlerClass
+        self._handler_factory = request_factory
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
-class Handler(object):
+class HandlerFactory(metaclass=abc.ABCMeta):
+
+    @abc.abstractmethod
+    def on_connection_established(self, connection, client_address):
+        pass
+
+
+class Handler(metaclass=abc.ABCMeta):
     '''
     Abstract class
     '''
 
-    __metadata__ = abc.ABCMeta
-
-    def __init__(self):
+    @abc.abstractmethod
+    def __init__(self, connection, client_address):
         pass
 
+    @abc.abstractmethod
     def got_new_data(self, data):
         '''
         :param data: data to handle
@@ -34,16 +41,17 @@ class Handler(object):
         '''
         pass
 
+
 class Server(_Protocol):
 
-    def __init__(self, host, port, RequestHandlerClass):
+    def __init__(self, host, port, handler_factory):
         '''
         :param host:
         :param port:
-        :param RequestHandlerClass:
+        :param handler_factory:
         :return:
         '''
-        super().__init__(RequestHandlerClass)
+        super().__init__(handler_factory)
         self._host = host
         self._port = port
         self._bind()
@@ -72,7 +80,8 @@ class Server(_Protocol):
         connection, address = self.socket.accept()
         connection.setblocking(0)
 
-        # call class constructor with the accepted connection and address of client
-        self._handlers[connection] = self._RequestHandlerClass(connection, address)
+        # call the handler factory's connection established function with connection and address
+        handler = self._handler_factory.on_connection_established(connection, address)
+        self._handlers[connection] = handler
 
         return connection, address

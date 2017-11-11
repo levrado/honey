@@ -1,14 +1,22 @@
-import socket
 import select
 import sys
 import traceback
-import logging
 
 import protocols.tcp
+import reactor.promise
 import utils
 
 
-class Reactor:
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class Reactor(metaclass=Singleton):
 
     def __init__(self):
 
@@ -16,7 +24,7 @@ class Reactor:
         self._connections = []
         self._servers = {}
         self._clients = {}
-        self._callbacks = []
+        self._to_fulfill = []
         self._running = False
 
         self._logger = utils.Logger('Reactor')
@@ -35,7 +43,7 @@ class Reactor:
         self._clients[connection].handle_data_received(connection)
         # self._logger.debug('Got new data from client={0}'.format(connection))
 
-    def _handle_acceptable_object(self, acceptable_object):
+    def handle_acceptable_object(self, acceptable_object):
         if acceptable_object == sys.stdin:
 
             # handle standard input
@@ -50,8 +58,8 @@ class Reactor:
         else:
             self._handle_new_message_received(acceptable_object)
 
-    def add_server(self, host, port, HandlerClass):
-        tcp_server = protocols.tcp.Server(host, port, HandlerClass)
+    def add_server(self, host, port, handler):
+        tcp_server = protocols.tcp.Server(host, port, handler)
         self._servers[tcp_server.socket] = tcp_server
         self._connections.append(tcp_server.socket)
         self._logger.debug('Added a new tcp server to reactor server={0}'.format(tcp_server))
@@ -60,60 +68,95 @@ class Reactor:
         self._connections.remove(connection)
         self._logger.debug('Removed a connection scoket={0}'.format(connection))
 
-def _handle_io():
-    input_ready = None
-    select_connections_list = main_reactor._connections + [sys.stdin]
+    @property
+    def connections(self):
+        return self._connections
 
-    for connection in select_connections_list:
+    @property
+    def running(self):
+        return self._running
+
+    @property
+    def to_fulfill(self):
+        return self._to_fulfill
+
+    def set_running(self, new_value):
+        self._running = new_value
+
+    def add_fulfiller(self, promise_to_fulfill, *args, **kwargs):
+        self._to_fulfill.append((promise_to_fulfill, args, kwargs))
+
+    def run(self):
+        '''
+        The heart of our async logic, process new connections, new messages from existing connections
+        or complete reading the data from receiving messages
+        '''
+        self.set_running(True)
         try:
-            if connection._closed:
-                main_reactor.remove_connection(connection)
-        except AttributeError:
+            while self.running:
+                '''
+                Project Goals:
+    
+                Accept a set of file descriptors you are interested in performing I/O with.
+                Tell you, repeatedly, when any file descriptors are ready for I/O.
+                Provide lots of nice abstractions to help you use the reactor with the least amount of effort.
+                Provide implementations of UDP and TCP protocols that you can use out of the box.
+    
+                '''
+                self.handle_io()
+                self.handle_promises()
+
+        except (KeyboardInterrupt, SystemExit):
             pass
 
-    # dont wait at all, check and continue without blocking
-    # TODO make this a blocking stmnt, handle the existing connections on a new thread (sub process)
-    try:
-        input_ready, output_ready, except_ready = select.select(select_connections_list, [], [], 0)
+        except Exception as e:
+            self._logger.warn(str(e))
+            traceback.print_tb(sys.exc_info()[2])
 
-    except ValueError:
-        pass
+        finally:
+            self._logger.info('Stopping reactor (Should be a cleanup)')
 
-    # did we got anything from one of the file descriptors?
-    if input_ready:
-        for acceptable_object in input_ready:
-            main_reactor._handle_acceptable_object(acceptable_object)
+    def handle_promises(self):
+        try:
+            next_to_fulfill, args, kwargs = self.to_fulfill.pop()
+            next_to_fulfill(*args, **kwargs)
+        except IndexError:
+            pass
+
+    def handle_io(self):
+        input_ready = None
+        select_connections_list = self.connections + [sys.stdin]
+
+        for connection in select_connections_list:
+            try:
+                if connection._closed:
+                    self.remove_connection(connection)
+            except AttributeError:
+                pass
+
+        # dont wait at all, check and continue without blocking
+        try:
+            input_ready, output_ready, except_ready = select.select(select_connections_list, [], [], 0)
+
+        except ValueError:
+            pass
+
+        # did we got anything from one of the file descriptors?
+        if input_ready:
+            for acceptable_object in input_ready:
+                self.handle_acceptable_object(acceptable_object)
+
 
 def run():
-    '''
-    The heart of our async logic, process new connections, new messages from existing connections
-    or complete reading the data from receiving messages
-    '''
-    main_reactor._running = True
-    next = 0
-    try:
-        while main_reactor._running:
-            '''
-            Project Goals:
+    main_reactor.run()
 
-            Accept a set of file descriptors you are interested in performing I/O with.
-            Tell you, repeatedly, when any file descriptors are ready for I/O.
-            Provide lots of nice abstractions to help you use the reactor with the least amount of effort.
-            Provide implementations of UDP and TCP protocols that you can use out of the box.
 
-            '''
-            _handle_io()
+def add_tcp_server(host, port, handler):
+    main_reactor.add_server(host, port, handler)
 
-    except (KeyboardInterrupt, SystemExit):
-        pass
 
-    except Exception as e:
-        traceback.print_tb()
+def add_fulfiller(promise_to_fulfill, *args, **kwargs):
+    main_reactor.add_fulfiller(promise_to_fulfill, *args, **kwargs)
 
-    finally:
-        main_reactor._logger.info('Stopping reactor (Should be a cleanup)')
-
-def add_tcp_server(host, port, HandlerClass):
-    main_reactor.add_server(host, port, HandlerClass)
 
 main_reactor = Reactor()
